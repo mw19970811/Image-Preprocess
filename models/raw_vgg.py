@@ -23,13 +23,14 @@ model_urls = {
 
 class VGG(nn.Module):
 
-    def __init__(self, features, preprocess, num_classes=1000, init_weights=True):
+    def __init__(self, features, preprocess, num_classes=10, init_weights=True):
         super(VGG, self).__init__()
         self.features = features
         self.preprocess = preprocess
-        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        # self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        self.avgpool = nn.AvgPool2d(kernel_size=1, stride=1)
         self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, num_classes),
+            nn.Linear(512, num_classes),
             # nn.ReLU(True),
             # nn.Dropout(),
             # nn.Linear(4096, 4096),
@@ -45,10 +46,9 @@ class VGG(nn.Module):
             y = x
         else:
             y = torch.cat((x,torch.square(x)),dim=1)
-        # y = torch.cat((x,torch.square(x)),dim=1)
         y = self.features(y)
         y = self.avgpool(y)
-        y = torch.flatten(y, 1)
+        y = y.view(y.size(0),-1)
         y = self.classifier(y)
         return y
 

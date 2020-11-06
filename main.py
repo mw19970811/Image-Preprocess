@@ -16,8 +16,9 @@ def Args():
     parser.add_argument('--num-workers', type=int, default=0)
     parser.add_argument('--test-batch-size', type=int, default=20)
     parser.add_argument('--test-num-workers', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=160)
-    parser.add_argument('--lr', type=float, default=0.001, )
+    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--lr', type=float, default=0.0005)
+    parser.add_argument('--use-adam', type=bool, default=True)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
     parser.add_argument('--net-preprocess', type=str, default='bin')
@@ -34,11 +35,12 @@ def adjust_lr(args, optimizer, epoch):
         print('Change lr:'+str(lr))
 
 
-def train(args, trainloader, model, epoch, optimizer):
+def train(args, trainloader, model, epoch, optimizer, start_time):
     model.train()
     avg_loss = 0.
     train_acc = 0.
-    adjust_lr(args, optimizer, epoch)
+    if not args.use_adam:
+        adjust_lr(args, optimizer, epoch)
     for batch_idx, (data, target) in enumerate(trainloader):
 
         data, target = data.to(args.device), target.to(args.device)
@@ -51,10 +53,12 @@ def train(args, trainloader, model, epoch, optimizer):
         loss.backward()
 
         optimizer.step()
-    print('Train Epoch: {}, loss: {:.6f}, acc: {:.4f}%'.format(epoch, loss.item(), 100.*train_acc/len(trainloader.dataset)), end=' | ')
+    print('Train Epoch: {}, loss: {:.6f}, acc: {:.4f}%, speed: {:.4f}it/s'.format(epoch,
+                    loss.item(), 100.*train_acc/len(trainloader.dataset),
+                    args.batch_size*len(trainloader)/(time.time()-start_time)), end=' | ')
 
 
-def val(args, testloader, model, epoch):
+def val(args, testloader, model, epoch, start_time):
     model.eval()
     test_loss = 0.
     correct=0.
@@ -67,7 +71,9 @@ def val(args, testloader, model, epoch):
             correct += pred.eq(label.data.view_as(pred)).cpu().sum()
     test_loss/=len(testloader.dataset)
     correct = int(correct)
-    print('Test set:average loss: {:.4f}, accuracy: {:.4f}%'.format(test_loss, 100.*correct/len(testloader.dataset)))
+    print('Test set:average loss: {:.4f}, accuracy: {:.4f}%, speed: {:.4f}it/s'.format(test_loss,
+                        100.*correct/len(testloader.dataset),
+                        args.batch_size*len(testloader)/(time.time()-start_time)))
     return correct/len(testloader.dataset)
 
 
@@ -121,19 +127,30 @@ def main():
 
     model = eval(args.net_name)(args.net_preprocess, num_classes=numclasses)
     model.to(args.device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    if args.use_adam:
+        # optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    else:
+        # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     print(str(args))
 
     best_val_acc=0.
     Save_Path = os.path.join(args.checkpoint,args.net_preprocess+'_'+args.net_name+'_'+str(best_val_acc)+'.pth')
+    
     for i in range(args.epochs):
-        train(args, trainloader, model, i+1, optimizer)
-        temp_acc = val(args, testloader, model, i+1)
-        if temp_acc > best_val_acc:
+        start_time = time.time()
+        train(args, trainloader, model, i+1, optimizer, start_time)
+        start_time = time.time()
+        temp_acc = val(args, testloader, model, i+1, start_time)
+        if temp_acc > best_val_acc or args.use_adam:
             if os.path.exists(Save_Path):
                 os.remove(Save_Path)
             best_val_acc = temp_acc
-            Save_Path = os.path.join(args.checkpoint,args.net_preprocess+'_'+args.net_name+'_'+str(best_val_acc)+'.pth')
+            if args.use_adam:
+                Save_Path = os.path.join(args.checkpoint,args.net_preprocess+'_'+args.net_name+'_'+str(best_val_acc)+'_adam.pth')
+            else:
+                Save_Path = os.path.join(args.checkpoint,args.net_preprocess+'_'+args.net_name+'_'+str(best_val_acc)+'_sgd.pth')
             torch.save(model.state_dict(), Save_Path)
         else:
             if os.path.exists(Save_Path):
