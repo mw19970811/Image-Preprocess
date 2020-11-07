@@ -28,7 +28,7 @@ class VGG(nn.Module):
         self.features = features
         self.preprocess = preprocess
         # self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        self.avgpool = nn.AvgPool2d(kernel_size=1, stride=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.classifier = nn.Sequential(
             nn.Linear(512, num_classes),
             # nn.ReLU(True),

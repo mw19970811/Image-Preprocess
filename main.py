@@ -14,15 +14,15 @@ def Args():
     parser.add_argument('--dataset', type=str, default='cifar10', help='training dataset')
     parser.add_argument('--batch-size', type=int, default=128)
     parser.add_argument('--num-workers', type=int, default=0)
-    parser.add_argument('--test-batch-size', type=int, default=20)
+    parser.add_argument('--test-batch-size', type=int, default=256)
     parser.add_argument('--test-num-workers', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=100)
-    parser.add_argument('--lr', type=float, default=0.0005)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--use-adam', type=bool, default=True)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
     parser.add_argument('--net-preprocess', type=str, default='bin')
-    parser.add_argument('--net-name', type=str, default='vgg16') # raw_vgg16
+    parser.add_argument('--net-name', type=str, default='vgg16_bn') # raw_vgg16
     parser.add_argument('--checkpoint', type=str, default='checkpoint')
     return parser.parse_args()
 
@@ -39,8 +39,7 @@ def train(args, trainloader, model, epoch, optimizer, start_time):
     model.train()
     avg_loss = 0.
     train_acc = 0.
-    if not args.use_adam:
-        adjust_lr(args, optimizer, epoch)
+    adjust_lr(args, optimizer, epoch)
     for batch_idx, (data, target) in enumerate(trainloader):
 
         data, target = data.to(args.device), target.to(args.device)
@@ -73,7 +72,7 @@ def val(args, testloader, model, epoch, start_time):
     correct = int(correct)
     print('Test set:average loss: {:.4f}, accuracy: {:.4f}%, speed: {:.4f}it/s'.format(test_loss,
                         100.*correct/len(testloader.dataset),
-                        args.batch_size*len(testloader)/(time.time()-start_time)))
+                        args.test_batch_size*len(testloader)/(time.time()-start_time)))
     return correct/len(testloader.dataset)
 
 
@@ -90,8 +89,8 @@ def main():
             os.mkdir('data/CIFAR10')
         trainset = torchvision.datasets.CIFAR10(root='./data/CIFAR10', train=True, download=True,
                                                 transform=transforms.Compose([
-                                                    transforms.Pad(4),
-                                                    transforms.RandomCrop(32),
+                                                    # transforms.Pad(4),
+                                                    transforms.RandomCrop(32, padding=4),
                                                     transforms.RandomHorizontalFlip(),
                                                     transforms.ToTensor(),
                                                     transforms.Normalize((0.4914, 0.4822, 0.4465),(0.2023, 0.1994, 0.2010))
@@ -103,15 +102,15 @@ def main():
                                                 transforms.ToTensor(),
                                                 transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                                             ]))
-        testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=args.test_num_workers)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.test_num_workers)
     elif args.dataset=='cifar100':
         numclasses=100
         if not os.path.exists('data/CIFAR100'):
             os.mkdir('data/CIFAR100')
         trainset = torchvision.datasets.CIFAR100(root='./data/CIFAR100', train=True, download=True,
                                                 transform=transforms.Compose([
-                                                    transforms.Pad(4),
-                                                    transforms.RandomCrop(32),
+                                                    # transforms.Pad(4),
+                                                    transforms.RandomCrop(32, padding=4),
                                                     transforms.RandomHorizontalFlip(),
                                                     transforms.ToTensor(),
                                                     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -123,7 +122,7 @@ def main():
                                                 transforms.ToTensor(),
                                                 transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
                                             ]))
-        testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_size, shuffle=False, num_workers=args.num_workers)
 
     model = eval(args.net_name)(args.net_preprocess, num_classes=numclasses)
     model.to(args.device)
